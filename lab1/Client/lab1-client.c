@@ -279,7 +279,7 @@ lcore_main()
     struct rte_udp_hdr *udp_hdr;
 
     // Specify the dst mac address here: 
-    struct rte_ether_addr dst = {{0x14,0x58,0xd0,0x58,0x9f,0x52}};//{{0x14,0x58,0xD0,0x58,0x5F,0x33}};
+    struct rte_ether_addr dst = {{0x14,0x58,0xd0,0x58,0xff,0xc3}};//{{0x14,0x58,0xD0,0x58,0x5F,0x33}};
 
 	struct sliding_hdr *sld_h_ack;
     uint16_t nb_rx;
@@ -350,6 +350,7 @@ lcore_main()
 
         /* set the payload */
         memset(ptr, 'a', packet_len);
+        memcpy(ptr, &seq[port_id], sizeof(int));
 
         pkt->l2_len = RTE_ETHER_HDR_LEN;
         pkt->l3_len = sizeof(struct rte_ipv4_hdr);
@@ -387,7 +388,8 @@ lcore_main()
                 size_t payload_length = 0;
                 int p = parse_packet(&src, &dst, &payload, &payload_length, pkts[i]);
                 if (p != 0) {
-
+                    int ack_seq_num = *(int *)payload;
+				    printf("ack_seq_num: %d\n", ack_seq_num);
                     rte_pktmbuf_free(pkts[i]);
                     outstanding[p-1]--;
                 } else {
