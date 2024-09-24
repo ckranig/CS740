@@ -13,6 +13,7 @@
 #include <rte_udp.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <pthread.h>
 
 // #define PKT_TX_IPV4          (1ULL << 55)
 // #define PKT_TX_IP_CKSUM      (1ULL << 54)
@@ -34,11 +35,17 @@ static struct rte_ether_addr my_eth;
 static size_t message_size = 1000;
 static uint32_t seconds = 1;
 
-size_t window_len = 10;
-
 int flow_size = 10000;
 int packet_len = 1000;
 int flow_num = 1;
+
+size_t window_len = 3;
+bool window_ack_mask[10][11];
+uint64_t window_sent_time[10][11];
+int win_left = 0, win_right = 1; // window range: win_left ~ win_right-1
+
+pthread_t ptid;
+pthread_mutex_t window_info_mutex;
 
 static uint64_t raw_time(void) {
     struct timespec tstart = {0, 0};
@@ -240,6 +247,35 @@ port_init(uint16_t port, struct rte_mempool *mbuf_pool) {
 }
 /* >8 End of main functional part of port initialization. */
 
+// a thread responsible to handle ack msg from receiver.
+void listen_ack()
+{
+    int nb_rx = 0;
+    struct rte_mbuf *pkts[BURST_SIZE];
+    while (true) {
+        nb_rx = rte_eth_rx_burst(1, 0, pkts, BURST_SIZE);
+        if (nb_rx == 0) {
+            continue;
+        }
+
+        // printf("Received burst of %u\n", (unsigned)nb_rx);
+        for (int i = 0; i < nb_rx; i++) {
+            struct sockaddr_in src, dst;
+            void *payload = NULL;
+            size_t payload_length = 0;
+            int p = parse_packet(&src, &dst, &payload, &payload_length, pkts[i]);
+            if (p >= 0) {
+                int seq_num = *(int *)payload;
+                printf("seq_num: %d\n", seq_num);
+                pthread_mutex_lock(&window_info_mutex);
+                window_ack_mask[0][seq_num - win_left] = true;
+                pthread_mutex_unlock(&window_info_mutex);
+            }
+            rte_pktmbuf_free(pkts[i]);
+        }
+    }
+}
+
 /* >8 End Basic forwarding application lcore. */
 
 static void
@@ -252,126 +288,153 @@ lcore_main() {
     struct rte_udp_hdr *udp_hdr;
 
     // Specify the dst mac address here:
-    struct rte_ether_addr dst = {{0x14, 0x58, 0xD0, 0x58, 0xFF, 0xC3}};
+    struct rte_ether_addr dst = {{0xEC, 0xB1, 0xD7, 0x85, 0x1A, 0x33}};
 
     struct sliding_hdr *sld_h_ack;
     uint16_t nb_rx;
     uint64_t reqs = 0;
     // uint64_t cycle_wait = intersend_time * rte_get_timer_hz() / (1e9);
 
+    // initialize mutex
+    if (pthread_mutex_init(&window_info_mutex, NULL) != 0) { 
+        printf("\n mutex init has failed\n"); 
+        return ; 
+    }
+    pthread_create(&ptid, NULL, &listen_ack, NULL);
+
     // TODO: add in scaffolding for timing/printing out quick statistics
-    int outstanding[flow_num];
-    uint16_t seq[flow_num];
     size_t port_id = 0;
-    for (size_t i = 0; i < flow_num; i++) {
-        outstanding[i] = 0;
-        seq[i] = 0;
+    bool send_done = false;
+    for (size_t i = 0; i < flow_num; i++)
+    {
+        for (size_t j = 0; j < window_len; j++)
+        {
+            window_ack_mask[i][j] = false;
+            window_sent_time[i][j] = 0;
+        } 
     }
-
-    while (seq[port_id] < NUM_PING) {
-        // send a packet
-        pkt = rte_pktmbuf_alloc(mbuf_pool);
-        if (pkt == NULL) {
-            printf("Error allocating tx mbuf\n");
-            return;
-        }
-        size_t header_size = 0;
-
-        uint8_t *ptr = rte_pktmbuf_mtod(pkt, uint8_t *);
-        /* add in an ethernet header */
-        eth_hdr = (struct rte_ether_hdr *)ptr;
-
-        rte_ether_addr_copy(&my_eth, &eth_hdr->src_addr);
-        rte_ether_addr_copy(&dst, &eth_hdr->dst_addr);
-        eth_hdr->ether_type = rte_be_to_cpu_16(RTE_ETHER_TYPE_IPV4);
-        ptr += sizeof(*eth_hdr);
-        header_size += sizeof(*eth_hdr);
-
-        /* add in ipv4 header*/
-        ipv4_hdr = (struct rte_ipv4_hdr *)ptr;
-        ipv4_hdr->version_ihl = 0x45;
-        ipv4_hdr->type_of_service = 0x0;
-        ipv4_hdr->total_length = rte_cpu_to_be_16(sizeof(struct rte_ipv4_hdr) + sizeof(struct rte_udp_hdr) + message_size);
-        ipv4_hdr->packet_id = rte_cpu_to_be_16(1);
-        ipv4_hdr->fragment_offset = 0;
-        ipv4_hdr->time_to_live = 64;
-        ipv4_hdr->next_proto_id = IPPROTO_UDP;
-        ipv4_hdr->src_addr = rte_cpu_to_be_32(0x0A000001);  // 10.0.0.1
-        ipv4_hdr->dst_addr = rte_cpu_to_be_32(0x0A000002);  // 10.0.0.2
-
-        uint32_t ipv4_checksum = wrapsum(checksum((unsigned char *)ipv4_hdr, sizeof(struct rte_ipv4_hdr), 0));
-        // printf("Checksum is %u\n", (unsigned)ipv4_checksum);
-        ipv4_hdr->hdr_checksum = rte_cpu_to_be_32(ipv4_checksum);
-        header_size += sizeof(*ipv4_hdr);
-        ptr += sizeof(*ipv4_hdr);
-
-        /* add in UDP hdr*/
-        udp_hdr = (struct rte_udp_hdr *)ptr;
-        uint16_t srcp = PORT_NUM + port_id;
-        uint16_t dstp = PORT_NUM + port_id;
-        udp_hdr->src_port = rte_cpu_to_be_16(srcp);
-        udp_hdr->dst_port = rte_cpu_to_be_16(dstp);
-        udp_hdr->dgram_len = rte_cpu_to_be_16(sizeof(struct rte_udp_hdr) + packet_len);
-
-        uint16_t udp_cksum = rte_ipv4_udptcp_cksum(ipv4_hdr, (void *)udp_hdr);
-
-        // printf("Udp checksum is %u\n", (unsigned)udp_cksum);
-        udp_hdr->dgram_cksum = rte_cpu_to_be_16(udp_cksum);
-        ptr += sizeof(*udp_hdr);
-        header_size += sizeof(*udp_hdr);
-
-        /* set the payload */
-        memset(ptr, 'a', packet_len);
-        memcpy(ptr, &seq[port_id], sizeof(int));
-
-        pkt->l2_len = RTE_ETHER_HDR_LEN;
-        pkt->l3_len = sizeof(struct rte_ipv4_hdr);
-        // pkt->ol_flags = PKT_TX_IP_CKSUM | PKT_TX_IPV4;
-        pkt->data_len = header_size + packet_len;
-        pkt->pkt_len = header_size + packet_len;
-        pkt->nb_segs = 1;
-        int pkts_sent = 0;
-
-        unsigned char *pkt_buffer = rte_pktmbuf_mtod(pkt, unsigned char *);
-
-        pkts_sent = rte_eth_tx_burst(1, 0, &pkt, 1);
-        if (pkts_sent == 1) {
-            seq[port_id]++;
-            outstanding[port_id]++;
-        }
-
-        uint64_t last_sent = rte_get_timer_cycles();
-        // printf("Sent packet at %u, %d is outstanding, intersend is %u\n", (unsigned)last_sent, outstanding, (unsigned)intersend_time);
-
-        /* now poll on receiving packets */
-        nb_rx = 0;
-        reqs += 1;
-        while ((outstanding[port_id] > 0)) {
-            nb_rx = rte_eth_rx_burst(1, 0, pkts, BURST_SIZE);
-            if (nb_rx == 0) {
-                continue;
+    printf("NUM_PING: %u\n", NUM_PING);
+    while (!send_done)
+    {
+        // printf("test\n");
+        pthread_mutex_lock(&window_info_mutex);
+        if (window_ack_mask[0][0]) {
+            int shift = 1;
+            for (size_t i = 1; i < window_len; i++) {
+                if (!window_ack_mask[0][i]) break;
+                shift++;
             }
-
-            printf("Received burst of %u\n", (unsigned)nb_rx);
-            for (int i = 0; i < nb_rx; i++) {
-                struct sockaddr_in src, dst;
-                void *payload = NULL;
-                size_t payload_length = 0;
-                int p = parse_packet(&src, &dst, &payload, &payload_length, pkts[i]);
-                if (p >= 0) {
-                    int ack_seq_num = *(int *)payload;
-				    printf("ack_seq_num: %d\n", ack_seq_num);
-                    outstanding[p]--;
+            for (size_t i = 0; i < window_len - shift; i++) {
+                window_ack_mask[0][i] = window_ack_mask[0][i + shift];
+                window_sent_time[0][i] = window_sent_time[0][i + shift];
+            }
+            for (size_t i = window_len - shift; i < window_len; i++) {
+                window_ack_mask[0][i] = false;
+                window_sent_time[0][i] = 0;
+            }
+            win_left += shift;
+            win_right = win_left + window_len;
+            // printf("***window_len: %lu, window_left: %d, NUM_PING: %u\n", window_len, win_left, NUM_PING);
+            if (win_left >= NUM_PING) {
+                send_done = true;
+                break;
+            }
+        }
+        pthread_mutex_unlock(&window_info_mutex);
+        // printf("window_len: %lu, window_left: %d\n", window_len, win_left);
+        
+        for (size_t i = 0; i < window_len; i++) {
+            int seq_num = win_left + i;
+            if (seq_num >= NUM_PING) continue;
+            pthread_mutex_lock(&window_info_mutex);
+            // printf("seq_num: %d, sent_time: %" PRIu64 ", ack: %d\n", seq_num, window_sent_time[0][i], window_ack_mask[0][i]);
+            if (window_sent_time[0][i] == 0 || (!window_ack_mask[0][i] && time_now(window_sent_time[0][i]) > (uint64_t)1e9))
+            {
+                printf("test2\n");
+                // send a packet
+                pkt = rte_pktmbuf_alloc(mbuf_pool);
+                if (pkt == NULL) {
+                    printf("Error allocating tx mbuf\n");
+                    return;
                 }
-                    
+                size_t header_size = 0;
 
-                rte_pktmbuf_free(pkts[i]);
+                uint8_t *ptr = rte_pktmbuf_mtod(pkt, uint8_t *);
+                /* add in an ethernet header */
+                eth_hdr = (struct rte_ether_hdr *)ptr;
+
+                rte_ether_addr_copy(&my_eth, &eth_hdr->src_addr);
+                rte_ether_addr_copy(&dst, &eth_hdr->dst_addr);
+                eth_hdr->ether_type = rte_be_to_cpu_16(RTE_ETHER_TYPE_IPV4);
+                ptr += sizeof(*eth_hdr);
+                header_size += sizeof(*eth_hdr);
+
+                /* add in ipv4 header*/
+                ipv4_hdr = (struct rte_ipv4_hdr *)ptr;
+                ipv4_hdr->version_ihl = 0x45;
+                ipv4_hdr->type_of_service = 0x0;
+                ipv4_hdr->total_length = rte_cpu_to_be_16(sizeof(struct rte_ipv4_hdr) + sizeof(struct rte_udp_hdr) + message_size);
+                ipv4_hdr->packet_id = rte_cpu_to_be_16(1);
+                ipv4_hdr->fragment_offset = 0;
+                ipv4_hdr->time_to_live = 64;
+                ipv4_hdr->next_proto_id = IPPROTO_UDP;
+                ipv4_hdr->src_addr = rte_cpu_to_be_32(0x0A000001);  // 10.0.0.1
+                ipv4_hdr->dst_addr = rte_cpu_to_be_32(0x0A000002);  // 10.0.0.2
+
+                uint32_t ipv4_checksum = wrapsum(checksum((unsigned char *)ipv4_hdr, sizeof(struct rte_ipv4_hdr), 0));
+                // printf("Checksum is %u\n", (unsigned)ipv4_checksum);
+                ipv4_hdr->hdr_checksum = rte_cpu_to_be_32(ipv4_checksum);
+                header_size += sizeof(*ipv4_hdr);
+                ptr += sizeof(*ipv4_hdr);
+
+                /* add in UDP hdr*/
+                udp_hdr = (struct rte_udp_hdr *)ptr;
+                uint16_t srcp = PORT_NUM + port_id;
+                uint16_t dstp = PORT_NUM + port_id;
+                udp_hdr->src_port = rte_cpu_to_be_16(srcp);
+                udp_hdr->dst_port = rte_cpu_to_be_16(dstp);
+                udp_hdr->dgram_len = rte_cpu_to_be_16(sizeof(struct rte_udp_hdr) + packet_len);
+
+                uint16_t udp_cksum = rte_ipv4_udptcp_cksum(ipv4_hdr, (void *)udp_hdr);
+
+                // printf("Udp checksum is %u\n", (unsigned)udp_cksum);
+                udp_hdr->dgram_cksum = rte_cpu_to_be_16(udp_cksum);
+                ptr += sizeof(*udp_hdr);
+                header_size += sizeof(*udp_hdr);
+
+                /* set the payload */
+                memset(ptr, 'a', packet_len);
+                memcpy(ptr, &seq_num, sizeof(int));
+
+                pkt->l2_len = RTE_ETHER_HDR_LEN;
+                pkt->l3_len = sizeof(struct rte_ipv4_hdr);
+                // pkt->ol_flags = PKT_TX_IP_CKSUM | PKT_TX_IPV4;
+                pkt->data_len = header_size + packet_len;
+                pkt->pkt_len = header_size + packet_len;
+                pkt->nb_segs = 1;
+                int pkts_sent = 0;
+
+                unsigned char *pkt_buffer = rte_pktmbuf_mtod(pkt, unsigned char *);
+
+                pkts_sent = rte_eth_tx_burst(1, 0, &pkt, 1);
+                if (pkts_sent == 1) {
+                    window_sent_time[0][i] = raw_time();
+                    reqs ++;
+                    printf("window_len: %lu, window_left: %d\n", window_len, win_left);
+                    printf("seq_num: %d, sent_time: %" PRIu64 "\n", seq_num, window_sent_time[0][i]);
+                }
+
+                uint64_t last_sent = rte_get_timer_cycles();
+                // printf("Sent packet at %u, %d is outstanding, intersend is %u\n", (unsigned)last_sent, outstanding, (unsigned)intersend_time);
             }
+            pthread_mutex_unlock(&window_info_mutex);
         }
-
-        // port_id = (port_id+1) % flow_num;
+        
     }
+
     printf("Sent %" PRIu64 " packets.\n", reqs);
+    pthread_detach(ptid);
+    pthread_mutex_destroy(&window_info_mutex);
 }
 /*
  * The main function, which does initialization and calls the per-lcore
