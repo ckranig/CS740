@@ -39,7 +39,7 @@ int flow_size = 10000;
 int packet_len = 1000;
 int flow_num = 1;
 
-size_t window_len = 3;
+size_t window_len = 10;
 bool window_ack_mask[10][11];
 uint64_t window_sent_time[10][11];
 int win_left = 0, win_right = 1; // window range: win_left ~ win_right-1
@@ -266,7 +266,7 @@ void listen_ack()
             int p = parse_packet(&src, &dst, &payload, &payload_length, pkts[i]);
             if (p >= 0) {
                 int seq_num = *(int *)payload;
-                printf("seq_num: %d\n", seq_num);
+                if (seq_num % 1000 == 0) printf("seq_num: %d\n", seq_num);
                 pthread_mutex_lock(&window_info_mutex);
                 window_ack_mask[0][seq_num - win_left] = true;
                 pthread_mutex_unlock(&window_info_mutex);
@@ -313,7 +313,7 @@ lcore_main() {
             window_sent_time[i][j] = 0;
         } 
     }
-    printf("NUM_PING: %u\n", NUM_PING);
+    // printf("NUM_PING: %u\n", NUM_PING);
     while (!send_done)
     {
         // printf("test\n");
@@ -350,7 +350,7 @@ lcore_main() {
             // printf("seq_num: %d, sent_time: %" PRIu64 ", ack: %d\n", seq_num, window_sent_time[0][i], window_ack_mask[0][i]);
             if (window_sent_time[0][i] == 0 || (!window_ack_mask[0][i] && time_now(window_sent_time[0][i]) > (uint64_t)1e9))
             {
-                printf("test2\n");
+                // printf("test2\n");
                 // send a packet
                 pkt = rte_pktmbuf_alloc(mbuf_pool);
                 if (pkt == NULL) {
@@ -419,9 +419,10 @@ lcore_main() {
                 pkts_sent = rte_eth_tx_burst(1, 0, &pkt, 1);
                 if (pkts_sent == 1) {
                     window_sent_time[0][i] = raw_time();
+                    // window_ack_mask[0][i] = true;
                     reqs ++;
-                    printf("window_len: %lu, window_left: %d\n", window_len, win_left);
-                    printf("seq_num: %d, sent_time: %" PRIu64 "\n", seq_num, window_sent_time[0][i]);
+                    // printf("window_len: %lu, window_left: %d\n", window_len, win_left);
+                    if (seq_num % 1000 == 0) printf("seq_num: %d, sent_time: %" PRIu64 "\n", seq_num, window_sent_time[0][i]);
                 }
 
                 uint64_t last_sent = rte_get_timer_cycles();

@@ -242,34 +242,33 @@ lcore_main(void) {
            rte_lcore_id());
 
     /* Main work of application loop. 8< */
+    struct rte_mbuf *bufs[BURST_SIZE];
+    struct rte_mbuf *pkt;
+    struct rte_ether_hdr *eth_h;
+    struct rte_ipv4_hdr *ip_h;
+    struct rte_udp_hdr *udp_h;
+    struct rte_ether_addr eth_addr;
+    uint32_t ip_addr;
+    uint8_t i;
+    uint8_t nb_replies = 0;
+
+    struct rte_mbuf *acks[BURST_SIZE];
+    struct rte_mbuf *ack;
+    // char *buf_ptr;
+    struct rte_ether_hdr *eth_h_ack;
+    struct rte_ipv4_hdr *ip_h_ack;
+    struct rte_udp_hdr *udp_h_ack;
     for (;;) {
         RTE_ETH_FOREACH_DEV(port) {
             /* Get burst of RX packets, from port1 */
             if (port != 1)
                 continue;
-
-            struct rte_mbuf *bufs[BURST_SIZE];
-            struct rte_mbuf *pkt;
-            struct rte_ether_hdr *eth_h;
-            struct rte_ipv4_hdr *ip_h;
-            struct rte_udp_hdr *udp_h;
-            struct rte_ether_addr eth_addr;
-            uint32_t ip_addr;
-            uint8_t i;
-            uint8_t nb_replies = 0;
-
-            struct rte_mbuf *acks[BURST_SIZE];
-            struct rte_mbuf *ack;
-            // char *buf_ptr;
-            struct rte_ether_hdr *eth_h_ack;
-            struct rte_ipv4_hdr *ip_h_ack;
-            struct rte_udp_hdr *udp_h_ack;
-
+            nb_replies = 0;
             const uint16_t nb_rx = rte_eth_rx_burst(port, 0, bufs, BURST_SIZE);
 
             if (unlikely(nb_rx == 0))
                 continue;
-
+            // printf("Received burst of %u\n", (unsigned)nb_rx);
             for (i = 0; i < nb_rx; i++) {
                 pkt = bufs[i];
                 struct sockaddr_in src, dst;
@@ -277,7 +276,7 @@ lcore_main(void) {
                 size_t payload_length = 0;
                 int udp_port_id = get_port(&src, &dst, &payload, &payload_length, pkt);
                 if (udp_port_id >= 0) {
-                    printf("Received packet number %d\n", rec);
+                    if (rec % 1000 == 0) printf("Received packet number %d\n", rec);
                 }
 
                 eth_h = rte_pktmbuf_mtod(pkt, struct rte_ether_hdr *);
@@ -292,7 +291,7 @@ lcore_main(void) {
                 udp_h = rte_pktmbuf_mtod_offset(pkt, struct rte_udp_hdr *,
                                                 sizeof(struct rte_ether_hdr) + sizeof(struct rte_ipv4_hdr));
                 int seq_num = *(int *)payload;
-				printf("seq_num: %d\n", seq_num);
+				if (seq_num % 1000 == 0) printf("seq_num: %d\n", seq_num);
                 // rte_pktmbuf_dump(stdout, pkt, pkt->pkt_len);
                 rec++;
 
@@ -330,6 +329,7 @@ lcore_main(void) {
                 ip_h_ack->hdr_checksum = rte_cpu_to_be_32(ipv4_checksum);
                 header_size += sizeof(*ip_h_ack);
                 ptr += sizeof(*ip_h_ack);
+
                 /* add in UDP hdr*/
                 udp_h_ack = (struct rte_udp_hdr *)ptr;
                 udp_h_ack->src_port = udp_h->dst_port;
@@ -343,6 +343,7 @@ lcore_main(void) {
 
                 header_size += sizeof(*udp_h_ack);
                 ptr += sizeof(*udp_h_ack);
+
                 /* set the payload */
                 memset(ptr, 'a', ack_len);
 				memcpy(ptr, &seq_num, sizeof(int));
@@ -357,7 +358,7 @@ lcore_main(void) {
 
                 unsigned char *ack_buffer = rte_pktmbuf_mtod(ack, unsigned char *);
                 acks[nb_replies++] = ack;
-
+                // printf("num_replies: %u\n", nb_replies);
                 rte_pktmbuf_free(bufs[i]);
             }
 
@@ -368,9 +369,9 @@ lcore_main(void) {
             }
 
             /* Free any unsent packets. */
-            if (unlikely(nb_tx < nb_rx)) {
+            if (unlikely(nb_tx < nb_replies)) {
                 uint16_t buf;
-                for (buf = nb_tx; buf < nb_rx; buf++)
+                for (buf = nb_tx; buf < nb_replies; buf++)
                     rte_pktmbuf_free(acks[buf]);
             }
         }
