@@ -23,11 +23,11 @@
 
 #define NUM_MBUFS 8191
 #define MBUF_CACHE_SIZE 250
-#define BURST_SIZE 32
+#define BURST_SIZE 256
 #define MAX_FLOW_NUM 100
 #define PORT_NUM 5001
 
-uint32_t NUM_PING = 100;
+uint64_t NUM_PING = 100;
 
 /* Define the mempool globally */
 struct rte_mempool *mbuf_pool = NULL;
@@ -35,14 +35,15 @@ static struct rte_ether_addr my_eth;
 static size_t message_size = 1000;
 static uint32_t seconds = 1;
 
-int flow_size = 10000;
+uint64_t flow_size = 10000;
 int packet_len = 1000;
 int flow_num = 1;
 
-size_t window_len = 10;
-bool window_ack_mask[10][11];
-uint64_t window_sent_time[10][11];
+size_t window_len = 250;
+bool window_ack_mask[10][251];
+uint64_t window_sent_time[10][251];
 int win_left = 0, win_right = 1; // window range: win_left ~ win_right-1
+uint64_t start_time;
 
 pthread_t ptid;
 pthread_mutex_t window_info_mutex;
@@ -266,8 +267,11 @@ void listen_ack()
             int p = parse_packet(&src, &dst, &payload, &payload_length, pkts[i]);
             if (p >= 0) {
                 int seq_num = *(int *)payload;
-                if (seq_num % 1000 == 0) printf("seq_num: %d\n", seq_num);
                 pthread_mutex_lock(&window_info_mutex);
+                if (seq_num % 500000 == 0) {
+                    uint64_t used_time = time_now(start_time);
+                    printf("seq_num: %d, used_time: %" PRIu64 "\n", seq_num, used_time);
+                }
                 window_ack_mask[0][seq_num - win_left] = true;
                 pthread_mutex_unlock(&window_info_mutex);
             }
@@ -348,7 +352,7 @@ lcore_main() {
             if (seq_num >= NUM_PING) continue;
             pthread_mutex_lock(&window_info_mutex);
             // printf("seq_num: %d, sent_time: %" PRIu64 ", ack: %d\n", seq_num, window_sent_time[0][i], window_ack_mask[0][i]);
-            if (window_sent_time[0][i] == 0 || (!window_ack_mask[0][i] && time_now(window_sent_time[0][i]) > (uint64_t)1e9))
+            if (window_sent_time[0][i] == 0 || (!window_ack_mask[0][i] && time_now(window_sent_time[0][i]) > (uint64_t)1e8))
             {
                 // printf("test2\n");
                 // send a packet
@@ -422,7 +426,7 @@ lcore_main() {
                     // window_ack_mask[0][i] = true;
                     reqs ++;
                     // printf("window_len: %lu, window_left: %d\n", window_len, win_left);
-                    if (seq_num % 1000 == 0) printf("seq_num: %d, sent_time: %" PRIu64 "\n", seq_num, window_sent_time[0][i]);
+                    if (seq_num % 500000 == 0) printf("seq_num: %d\n", seq_num);
                 }
 
                 uint64_t last_sent = rte_get_timer_cycles();
@@ -448,13 +452,15 @@ int main(int argc, char *argv[]) {
 
     if (argc == 3) {
         flow_num = (int)atoi(argv[1]);
-        flow_size = (int)atoi(argv[2]);
+        flow_size = (uint64_t)atoi(argv[2]);
+        flow_size = 32000000000;
     } else {
         printf("usage: ./lab1-client <flow_num> <flow_size>\n");
         return 1;
     }
-
+    printf("FLOW_SIZE: %" PRIu64 "\n", flow_size);
     NUM_PING = flow_size / packet_len;
+    printf("NUM_PING: %" PRIu64 "\n", NUM_PING);
 
     /* Initializion the Environment Abstraction Layer (EAL). 8< */
     int ret = rte_eal_init(argc, argv);
@@ -485,7 +491,10 @@ int main(int argc, char *argv[]) {
         printf("\nWARNING: Too many lcores enabled. Only 1 used.\n");
 
     /* Call lcore_main on the main core only. Called on single lcore. 8< */
+    start_time = raw_time();
     lcore_main();
+    uint64_t used_time = time_now(start_time);
+    printf("used_time: %" PRIu64 "\n", used_time);
     /* >8 End of called on single lcore. */
     printf("Done!\n");
     /* clean up the EAL */

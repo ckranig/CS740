@@ -18,13 +18,13 @@
 
 #define NUM_MBUFS 8191
 #define MBUF_CACHE_SIZE 250
-#define BURST_SIZE 32
+#define BURST_SIZE 128
 #define MAX_FLOW_NUM 100
 #define PORT_NUM 5001
 
 struct rte_mempool *mbuf_pool = NULL;
 static struct rte_ether_addr my_eth;
-size_t window_len = 10;
+size_t window_len = 100;
 
 int flow_size = 10000;
 int packet_len = 1000;
@@ -276,7 +276,7 @@ lcore_main(void) {
                 size_t payload_length = 0;
                 int udp_port_id = get_port(&src, &dst, &payload, &payload_length, pkt);
                 if (udp_port_id >= 0) {
-                    if (rec % 1000 == 0) printf("Received packet number %d\n", rec);
+                    if (rec % 100000 == 0) printf("Received packet number %d\n", rec);
                 }
 
                 eth_h = rte_pktmbuf_mtod(pkt, struct rte_ether_hdr *);
@@ -291,7 +291,7 @@ lcore_main(void) {
                 udp_h = rte_pktmbuf_mtod_offset(pkt, struct rte_udp_hdr *,
                                                 sizeof(struct rte_ether_hdr) + sizeof(struct rte_ipv4_hdr));
                 int seq_num = *(int *)payload;
-				if (seq_num % 1000 == 0) printf("seq_num: %d\n", seq_num);
+				if (seq_num % 100000 == 0) printf("seq_num: %d\n", seq_num);
                 // rte_pktmbuf_dump(stdout, pkt, pkt->pkt_len);
                 rec++;
 
