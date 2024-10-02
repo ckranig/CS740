@@ -23,7 +23,7 @@
 
 #define NUM_MBUFS 8191
 #define MBUF_CACHE_SIZE 250
-#define BURST_SIZE 256
+#define BURST_SIZE 32
 #define MAX_FLOW_NUM 100
 #define PORT_NUM 5001
 
@@ -39,14 +39,14 @@ uint64_t flow_size = 10000;
 int packet_len = 1000;
 int flow_num = 1;
 
-size_t window_len = 250;
-bool window_ack_mask[10][251];
-uint64_t window_sent_time[10][251];
-int win_left = 0, win_right = 1; // window range: win_left ~ win_right-1
+size_t window_len = 10;
+bool window_ack_mask[10][35];
+uint64_t window_sent_time[10][35];
+int window_left[10];
 uint64_t start_time;
 
-pthread_t ptid;
-pthread_mutex_t window_info_mutex;
+pthread_t ptid[10];
+pthread_mutex_t window_info_mutex[10];
 
 static uint64_t raw_time(void) {
     struct timespec tstart = {0, 0};
@@ -267,13 +267,17 @@ void listen_ack()
             int p = parse_packet(&src, &dst, &payload, &payload_length, pkts[i]);
             if (p >= 0) {
                 int seq_num = *(int *)payload;
-                pthread_mutex_lock(&window_info_mutex);
-                if (seq_num % 500000 == 0) {
+                if (seq_num >= window_left[p] && seq_num < window_left[p] + window_len) {
+                    pthread_mutex_lock(&window_info_mutex[p]);
+                    // if (seq_num % 1000 == 0) {
+                    //     uint64_t used_time = time_now(start_time);
+                    //     // printf("seq_num: %d, used_time: %" PRIu64 "\n", seq_num, used_time);
+                    // }
                     uint64_t used_time = time_now(start_time);
-                    printf("seq_num: %d, used_time: %" PRIu64 "\n", seq_num, used_time);
+                    if (seq_num % 100 == 0) printf("port: %d, seq_num: %d, used_time: %" PRIu64 "\n", p, seq_num, used_time);
+                    window_ack_mask[p][seq_num - window_left[p]] = true;
+                    pthread_mutex_unlock(&window_info_mutex[p]);
                 }
-                window_ack_mask[0][seq_num - win_left] = true;
-                pthread_mutex_unlock(&window_info_mutex);
             }
             rte_pktmbuf_free(pkts[i]);
         }
@@ -282,8 +286,8 @@ void listen_ack()
 
 /* >8 End Basic forwarding application lcore. */
 
-static void
-lcore_main() {
+static void*
+lcore_main(void *port_id_ptr) {
     struct rte_mbuf *pkts[BURST_SIZE];
     struct rte_mbuf *pkt;
     // char *buf_ptr;
@@ -299,62 +303,53 @@ lcore_main() {
     uint64_t reqs = 0;
     // uint64_t cycle_wait = intersend_time * rte_get_timer_hz() / (1e9);
 
-    // initialize mutex
-    if (pthread_mutex_init(&window_info_mutex, NULL) != 0) { 
-        printf("\n mutex init has failed\n"); 
-        return ; 
-    }
-    pthread_create(&ptid, NULL, &listen_ack, NULL);
-
     // TODO: add in scaffolding for timing/printing out quick statistics
-    size_t port_id = 0;
+    int port_id = *(int *)port_id_ptr;
+    printf("port_id: %" PRIu16 "\n", port_id);
     bool send_done = false;
-    for (size_t i = 0; i < flow_num; i++)
+    pthread_mutex_lock(&window_info_mutex[port_id]);
+    window_left[port_id] = 0;
+    for (size_t j = 0; j < window_len; j++)
     {
-        for (size_t j = 0; j < window_len; j++)
-        {
-            window_ack_mask[i][j] = false;
-            window_sent_time[i][j] = 0;
-        } 
+        window_ack_mask[port_id][j] = false;
+        window_sent_time[port_id][j] = 0;
     }
-    // printf("NUM_PING: %u\n", NUM_PING);
+    pthread_mutex_unlock(&window_info_mutex[port_id]);
     while (!send_done)
     {
         // printf("test\n");
-        pthread_mutex_lock(&window_info_mutex);
-        if (window_ack_mask[0][0]) {
+        pthread_mutex_lock(&window_info_mutex[port_id]);
+        if (window_ack_mask[port_id][0]) {
             int shift = 1;
             for (size_t i = 1; i < window_len; i++) {
-                if (!window_ack_mask[0][i]) break;
+                if (!window_ack_mask[port_id][i]) break;
                 shift++;
             }
             for (size_t i = 0; i < window_len - shift; i++) {
-                window_ack_mask[0][i] = window_ack_mask[0][i + shift];
-                window_sent_time[0][i] = window_sent_time[0][i + shift];
+                window_ack_mask[port_id][i] = window_ack_mask[port_id][i + shift];
+                window_sent_time[port_id][i] = window_sent_time[port_id][i + shift];
             }
             for (size_t i = window_len - shift; i < window_len; i++) {
-                window_ack_mask[0][i] = false;
-                window_sent_time[0][i] = 0;
+                window_ack_mask[port_id][i] = false;
+                window_sent_time[port_id][i] = 0;
             }
-            win_left += shift;
-            win_right = win_left + window_len;
+            window_left[port_id] += shift;
             // printf("***window_len: %lu, window_left: %d, NUM_PING: %u\n", window_len, win_left, NUM_PING);
-            if (win_left >= NUM_PING) {
+            if (window_left[port_id] >= NUM_PING) {
                 send_done = true;
                 break;
             }
         }
-        pthread_mutex_unlock(&window_info_mutex);
-        // printf("window_len: %lu, window_left: %d\n", window_len, win_left);
+        pthread_mutex_unlock(&window_info_mutex[port_id]);
+        // printf("window_len: %lu, window_left: %d\n", window_len, window_left);
         
         for (size_t i = 0; i < window_len; i++) {
-            int seq_num = win_left + i;
+            int seq_num = window_left[port_id] + i;
             if (seq_num >= NUM_PING) continue;
-            pthread_mutex_lock(&window_info_mutex);
-            // printf("seq_num: %d, sent_time: %" PRIu64 ", ack: %d\n", seq_num, window_sent_time[0][i], window_ack_mask[0][i]);
-            if (window_sent_time[0][i] == 0 || (!window_ack_mask[0][i] && time_now(window_sent_time[0][i]) > (uint64_t)1e8))
+            pthread_mutex_lock(&window_info_mutex[port_id]);
+            if (window_sent_time[port_id][i] == 0 || (!window_ack_mask[port_id][i] && time_now(window_sent_time[port_id][i]) > (uint64_t)1e9))
             {
-                // printf("test2\n");
+                // printf("seq_num: %d, sent_time: %" PRIu64 ", ack: %d\n", seq_num, window_sent_time[port_id][i], window_ack_mask[port_id][i]);
                 // send a packet
                 pkt = rte_pktmbuf_alloc(mbuf_pool);
                 if (pkt == NULL) {
@@ -422,24 +417,22 @@ lcore_main() {
 
                 pkts_sent = rte_eth_tx_burst(1, 0, &pkt, 1);
                 if (pkts_sent == 1) {
-                    window_sent_time[0][i] = raw_time();
-                    // window_ack_mask[0][i] = true;
+                    window_sent_time[port_id][i] = raw_time();
+                    // window_ack_mask[port_id][i] = true;
                     reqs ++;
-                    // printf("window_len: %lu, window_left: %d\n", window_len, win_left);
-                    if (seq_num % 500000 == 0) printf("seq_num: %d\n", seq_num);
+                    // printf("window_len: %lu, window_left: %d\n", window_len, window_left[port_id]);
+                    if (seq_num % 100 == 0) printf("port: %d, seq_num: %d\n", port_id, seq_num);
                 }
 
                 uint64_t last_sent = rte_get_timer_cycles();
                 // printf("Sent packet at %u, %d is outstanding, intersend is %u\n", (unsigned)last_sent, outstanding, (unsigned)intersend_time);
             }
-            pthread_mutex_unlock(&window_info_mutex);
+            pthread_mutex_unlock(&window_info_mutex[port_id]);
         }
         
     }
-
-    printf("Sent %" PRIu64 " packets.\n", reqs);
-    pthread_detach(ptid);
-    pthread_mutex_destroy(&window_info_mutex);
+    printf("PortID %" PRIu16 ": Sent %" PRIu64 " packets.\n", port_id, reqs); 
+    pthread_exit(NULL);
 }
 /*
  * The main function, which does initialization and calls the per-lcore
@@ -453,7 +446,6 @@ int main(int argc, char *argv[]) {
     if (argc == 3) {
         flow_num = (int)atoi(argv[1]);
         flow_size = (uint64_t)atoi(argv[2]);
-        flow_size = 32000000000;
     } else {
         printf("usage: ./lab1-client <flow_num> <flow_size>\n");
         return 1;
@@ -491,8 +483,25 @@ int main(int argc, char *argv[]) {
         printf("\nWARNING: Too many lcores enabled. Only 1 used.\n");
 
     /* Call lcore_main on the main core only. Called on single lcore. 8< */
+    // initialize mutex
+    for (int i = 0; i < flow_num; i++) {
+        if (pthread_mutex_init(&window_info_mutex[i], NULL) != 0) { 
+            printf("\n mutex init has failed\n"); 
+            return ; 
+        }    
+    }
+    pthread_create(&ptid[flow_num], NULL, &listen_ack, NULL);
     start_time = raw_time();
-    lcore_main();
+    int port_id_list[10];
+    for (int i = 0; i < flow_num; i++) {
+        port_id_list[i] = i;
+        pthread_create(&ptid[i], NULL, lcore_main, (void*)&port_id_list[i]);
+    }
+    for (int i = 0; i < flow_num; i++) {
+        pthread_join(ptid[i], NULL);
+        pthread_mutex_destroy(&window_info_mutex[i]);
+    }
+    pthread_detach(ptid[flow_num]);
     uint64_t used_time = time_now(start_time);
     printf("used_time: %" PRIu64 "\n", used_time);
     /* >8 End of called on single lcore. */
