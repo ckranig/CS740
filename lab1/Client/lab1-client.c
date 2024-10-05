@@ -274,7 +274,7 @@ void listen_ack()
                     //     // printf("seq_num: %d, used_time: %" PRIu64 "\n", seq_num, used_time);
                     // }
                     uint64_t used_time = time_now(start_time);
-                    printf("port: %d, seq_num: %d, used_time: %" PRIu64 "\n", p, seq_num, used_time);
+                    if (seq_num % 100 == 0) printf("port: %d, seq_num: %d, used_time: %" PRIu64 "\n", p, seq_num, used_time);
                     window_ack_mask[p][seq_num - window_left[p]] = true;
                     pthread_mutex_unlock(&window_info_mutex[p]);
                 }
@@ -418,10 +418,10 @@ lcore_main(void *port_id_ptr) {
                 pkts_sent = rte_eth_tx_burst(1, 0, &pkt, 1);
                 if (pkts_sent == 1) {
                     window_sent_time[port_id][i] = raw_time();
-                    window_ack_mask[port_id][i] = true;
+                    // window_ack_mask[port_id][i] = true;
                     reqs ++;
                     // printf("window_len: %lu, window_left: %d\n", window_len, window_left[port_id]);
-                    printf("port: %d, seq_num: %d\n", port_id, seq_num);
+                    if (seq_num % 100 == 0) printf("port: %d, seq_num: %d\n", port_id, seq_num);
                 }
 
                 uint64_t last_sent = rte_get_timer_cycles();
