@@ -31,7 +31,7 @@ main(int argc, char *argv[]) {
 
     uint32_t rngSeed = 1729; //defult vaule
     parseInt(args, "rngseed", rngSeed);
-    srand(rngSeed); //隨機數生成器
+    srand(rngSeed);
 
     uint32_t expt = 0;
     parseInt(args, "expt", expt);
@@ -40,18 +40,17 @@ main(int argc, char *argv[]) {
         return 0;
     }
 
-    EventList &eventlist = EventList::Get(); // 獲取事件列表的引用
+    EventList &eventlist = EventList::Get();
     Logfile logfile(logpath);
 
     /* Run desired experiment. Complete list defined in <test.h> */ 
-    //testbed設定：拓樸、路由器行為等等
     if (run_experiment(expt, args, logfile)) { // setting testbed (single_link, conga, fat_tree)
         cerr << "Unknown experiment number\n";
         exit(0);
     }
 
     // Run the simulation!
-    Clock c; // Q: not use?
+    Clock c;
     while (eventlist.doNextEvent()) {}
 
     cerr << "\nExiting successfully!" << endl;

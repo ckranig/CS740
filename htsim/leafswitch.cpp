@@ -16,7 +16,6 @@ LeafSwitch::LeafSwitch(int id) : id(id) {
 
 void LeafSwitch::updateCongestionToLeaf(int leafId, int congestionLevel) {
     // _congestionToLeaf[leafId].push_back(congestionLevel);
-    // // 只保留最近的N個測量值
     // if(_congestionToLeaf[leafId].size() > 10) {
     //     _congestionToLeaf[leafId].erase(_congestionToLeaf[leafId].begin());
     // }
@@ -27,12 +26,11 @@ void LeafSwitch::updateCongestionFromLeaf(int leafId, int congestionLevel) {
 }
 
 int LeafSwitch::selectBestUplink(int destLeafId) {
-    // 尋找擁塞程度最小的上行鏈路
     // int bestUplink = 0;
     // int minCongestion = CONGA_MAX_CONGESTION + 1;
     
     // for(int uplink = 0; uplink < NUMOFCORE; uplink++) {
-    //     // 獲取該路徑的擁塞值
+    //     
     //     int pathCongestion = std::max(_congestionToLeaf[destLeafId][uplink], _congestionFromLeaf[destLeafId]);
     //     if(pathCongestion < minCongestion) {
     //         minCongestion = pathCongestion;
@@ -44,7 +42,6 @@ int LeafSwitch::selectBestUplink(int destLeafId) {
 }
 
 int LeafSwitch::measureLocalCongestion(Queue* queue) {
-    // 根據隊列使用率計算本地擁塞程度
     // double queueUtil = (double)queue->_queuesize / queue->_maxsize;
     // return quantizeCongestion(queueUtil);
 }

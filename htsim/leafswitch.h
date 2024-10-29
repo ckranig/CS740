@@ -18,7 +18,6 @@ class LeafSwitch {
 public:
     LeafSwitch(int id);
     
-    // 主要方法
     void updateCongestionToLeaf(int leafId, int congestionLevel);
     void updateCongestionFromLeaf(int leafId, int congestionLevel);
     int selectBestUplink(int destLeafId);

@@ -38,6 +38,8 @@ class Queue : public EventSource, public PacketSink
 
         mem_b _maxsize;   // Maximum queue size.
         mem_b _queuesize; // Current queue size.
+        // simtime_picosec _timeStamp;
+        // long long _flowCapacity;
 
     protected:
         // Start serving the item at the head of the queue.

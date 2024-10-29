@@ -12,10 +12,12 @@ Queue::Queue(linkspeed_bps bitrate,
              : EventSource("queue"), 
              _maxsize(maxsize), 
              _queuesize(0),
+            //  _flowCapacity(0),
              _bitrate(bitrate), 
              _logger(logger)
 {
     _ps_per_byte = (simtime_picosec)(8 * 1000000000000UL / _bitrate);
+    // _timeStamp = EventList::Get().now();
 }
 
 void
@@ -71,8 +73,18 @@ Queue::receivePacket(Packet &pkt)
     bool queueWasEmpty = _enqueued.empty();
     _enqueued.push_front(&pkt);
     _queuesize += pkt.size();
-
-    if (_logger) {
+    // simtime_picosec curTime = EventList::Get().now();
+    // // cout << _timeStamp << curTime << _flowCapacity << "\n";
+    // long long update_iter = (curTime / 10000000) - (_timeStamp / 10000000);
+    // for (long long i = 0; i < update_iter; i++)
+    // {
+    //     _flowCapacity *= 0.1;
+    // }
+    // // cout << _timeStamp << curTime << _flowCapacity << "\n";
+    // _timeStamp = curTime;
+    // _flowCapacity += pkt.size();
+    if (_logger)
+    {
         _logger->logQueue(*this, QueueLogger::PKT_ENQUEUE, pkt);
     }
 
