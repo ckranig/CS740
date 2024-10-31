@@ -41,7 +41,7 @@ namespace conga {
 
     void generateRoute(route_t*& fwd, route_t*& rev, uint32_t& src, uint32_t& dst, uint64_t flowSize,  simtime_picosec startTime);
 
-
+    uint32_t mode = 0;
 }
 
 using namespace std;
@@ -148,7 +148,11 @@ conga_testbed(const ArgList &args, Logfile &logfile)
     parseInt(args, "duration", Duration);
     parseInt(args, "flowsize", AvgFlowSize);
     parseDouble(args, "utilization", Utilization);
+    parseInt(args, "mode", mode);
 
+    if(mode == 0) cerr << "Conga: ";
+    if(mode == 1) cerr << "ECMP: ";
+    cerr << "load is (" << Utilization << "), " << "workloads is (" << FlowDist << ")\n"; 
 
     double totalBandwidth = NUM_CORE * CORE_SPEED;
     double flowRate = totalBandwidth * Utilization;
@@ -217,8 +221,9 @@ void conga::generateRoute(route_t*& fwd, route_t*& rev, uint32_t& src, uint32_t&
     
     // build network topology
     uint32_t initial_core = 0;
-    long long minCongestion = LEAF_BUFFER;
+    long long minCongestion = LLONG_MAX;
 
+    //Conga
     for (int i = 0; i < NUM_CORE; i++) {
         // long long curCongestion = max(qLeafCore[src_leaf][i]->_flowCapacity, qCoreLeaf[i][dst_leaf]->_flowCapacity);
         long long curCongestion = max(qLeafCore[src_leaf][i]->_queuesize, qCoreLeaf[i][dst_leaf]->_queuesize);
@@ -227,6 +232,7 @@ void conga::generateRoute(route_t*& fwd, route_t*& rev, uint32_t& src, uint32_t&
             initial_core = i;
         } 
     }
+    //ECMP
     // initial_core = (src_leaf+dst_leaf) % NUM_CORE;
 
     fwd->push_back(qServerLeaf[src_leaf][src_server]);
