@@ -1,0 +1,122 @@
+yjaw@node0:~/htsim$ cat stat2.txt
+Conga: --utilization=0.1 --flowdist=uniform flowsize=100000
+----------------------------------------------------------------------
+All flows average FCT: 86.80 ms (total flows: 300898)
+Small flows (<100KB) average FCT: 0.00 ms (total flows: 0)
+Large flows (>=100KB) average FCT: 86.80 ms (total flows: 300898)
+----------------------------------------------------------------------
+ECMP: --utilization=0.1 --flowdist=uniform flowsize=100000
+----------------------------------------------------------------------
+All flows average FCT: 86.72 ms (total flows: 300898)
+Small flows (<100KB) average FCT: 0.00 ms (total flows: 0)
+Large flows (>=100KB) average FCT: 86.72 ms (total flows: 300898)
+----------------------------------------------------------------------
+Conga: --utilization=.2 --flowdist=uniform flowsize=100000
+----------------------------------------------------------------------
+All flows average FCT: 87.99 ms (total flows: 601804)
+Small flows (<100KB) average FCT: 0.00 ms (total flows: 0)
+Large flows (>=100KB) average FCT: 87.99 ms (total flows: 601804)
+----------------------------------------------------------------------
+ECMP: --utilization=.2 --flowdist=uniform flowsize=100000
+----------------------------------------------------------------------
+All flows average FCT: 87.86 ms (total flows: 601804)
+Small flows (<100KB) average FCT: 0.00 ms (total flows: 0)
+Large flows (>=100KB) average FCT: 87.86 ms (total flows: 601804)
+----------------------------------------------------------------------
+Conga: --utilization=.3 --flowdist=uniform flowsize=100000
+----------------------------------------------------------------------
+All flows average FCT: 89.18 ms (total flows: 901683)
+Small flows (<100KB) average FCT: 0.00 ms (total flows: 0)
+Large flows (>=100KB) average FCT: 89.18 ms (total flows: 901683)
+----------------------------------------------------------------------
+ECMP: --utilization=.3 --flowdist=uniform flowsize=100000
+----------------------------------------------------------------------
+All flows average FCT: 89.00 ms (total flows: 901683)
+Small flows (<100KB) average FCT: 0.00 ms (total flows: 0)
+Large flows (>=100KB) average FCT: 89.00 ms (total flows: 901683)
+----------------------------------------------------------------------
+Conga: --utilization=.4 --flowdist=uniform flowsize=100000
+----------------------------------------------------------------------
+All flows average FCT: 90.37 ms (total flows: 1201179)
+Small flows (<100KB) average FCT: 0.00 ms (total flows: 0)
+Large flows (>=100KB) average FCT: 90.37 ms (total flows: 1201179)
+----------------------------------------------------------------------
+ECMP: --utilization=.4 --flowdist=uniform flowsize=100000
+----------------------------------------------------------------------
+All flows average FCT: 90.16 ms (total flows: 1201179)
+Small flows (<100KB) average FCT: 0.00 ms (total flows: 0)
+Large flows (>=100KB) average FCT: 90.16 ms (total flows: 1201179)
+----------------------------------------------------------------------
+Conga: --utilization=.5 --flowdist=uniform flowsize=100000
+----------------------------------------------------------------------
+All flows average FCT: 91.59 ms (total flows: 1501769)
+Small flows (<100KB) average FCT: 0.00 ms (total flows: 0)
+Large flows (>=100KB) average FCT: 91.59 ms (total flows: 1501769)
+----------------------------------------------------------------------
+ECMP: --utilization=.5 --flowdist=uniform flowsize=100000
+----------------------------------------------------------------------
+All flows average FCT: 91.34 ms (total flows: 1501769)
+Small flows (<100KB) average FCT: 0.00 ms (total flows: 0)
+Large flows (>=100KB) average FCT: 91.34 ms (total flows: 1501769)
+----------------------------------------------------------------------
+Conga: --utilization=.6 --flowdist=uniform flowsize=100000
+----------------------------------------------------------------------
+All flows average FCT: 92.82 ms (total flows: 1801898)
+Small flows (<100KB) average FCT: 0.00 ms (total flows: 0)
+Large flows (>=100KB) average FCT: 92.82 ms (total flows: 1801898)
+----------------------------------------------------------------------
+ECMP: --utilization=.6 --flowdist=uniform flowsize=100000
+----------------------------------------------------------------------
+All flows average FCT: 92.54 ms (total flows: 1801898)
+Small flows (<100KB) average FCT: 0.00 ms (total flows: 0)
+Large flows (>=100KB) average FCT: 92.54 ms (total flows: 1801898)
+----------------------------------------------------------------------
+Conga: --utilization=.7 --flowdist=uniform flowsize=100000
+----------------------------------------------------------------------
+All flows average FCT: 94.07 ms (total flows: 2100908)
+Small flows (<100KB) average FCT: 0.00 ms (total flows: 0)
+Large flows (>=100KB) average FCT: 94.07 ms (total flows: 2100908)
+----------------------------------------------------------------------
+ECMP: --utilization=.7 --flowdist=uniform flowsize=100000
+----------------------------------------------------------------------
+All flows average FCT: 93.74 ms (total flows: 2100910)
+Small flows (<100KB) average FCT: 0.00 ms (total flows: 0)
+Large flows (>=100KB) average FCT: 93.74 ms (total flows: 2100910)
+----------------------------------------------------------------------
+Conga: --utilization=.8 --flowdist=uniform flowsize=100000
+----------------------------------------------------------------------
+All flows average FCT: 95.32 ms (total flows: 2399944)
+Small flows (<100KB) average FCT: 0.00 ms (total flows: 0)
+Large flows (>=100KB) average FCT: 95.32 ms (total flows: 2399944)
+----------------------------------------------------------------------
+ECMP: --utilization=.8 --flowdist=uniform flowsize=100000
+----------------------------------------------------------------------
+All flows average FCT: 94.96 ms (total flows: 2399944)
+Small flows (<100KB) average FCT: 0.00 ms (total flows: 0)
+Large flows (>=100KB) average FCT: 94.96 ms (total flows: 2399944)
+----------------------------------------------------------------------
+Conga: --utilization=.9 --flowdist=uniform flowsize=100000
+----------------------------------------------------------------------
+All flows average FCT: 96.59 ms (total flows: 2699429)
+Small flows (<100KB) average FCT: 0.00 ms (total flows: 0)
+Large flows (>=100KB) average FCT: 96.59 ms (total flows: 2699429)
+----------------------------------------------------------------------
+ECMP: --utilization=.9 --flowdist=uniform flowsize=100000
+----------------------------------------------------------------------
+All flows average FCT: 96.19 ms (total flows: 2699429)
+Small flows (<100KB) average FCT: 0.00 ms (total flows: 0)
+Large flows (>=100KB) average FCT: 96.19 ms (total flows: 2699429)
+----------------------------------------------------------------------
+Conga: --utilization=1.0 --flowdist=uniform flowsize=100000
+----------------------------------------------------------------------
+All flows average FCT: 97.90 ms (total flows: 2999424)
+Small flows (<100KB) average FCT: 0.00 ms (total flows: 0)
+Large flows (>=100KB) average FCT: 97.90 ms (total flows: 2999424)
+----------------------------------------------------------------------
+ECMP: --utilization=1.0 --flowdist=uniform flowsize=100000
+----------------------------------------------------------------------
+All flows average FCT: 97.44 ms (total flows: 2999424)
+Small flows (<100KB) average FCT: 0.00 ms (total flows: 0)
+Large flows (>=100KB) average FCT: 97.44 ms (total flows: 2999424)
+----------------------------------------------------------------------
+yjaw@node0:~/htsim$ 

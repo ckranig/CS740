@@ -42,6 +42,7 @@ namespace conga {
     void generateRoute(route_t*& fwd, route_t*& rev, uint32_t& src, uint32_t& dst, uint64_t flowSize,  simtime_picosec startTime);
 
     uint32_t mode = 0;
+    int arr[12] = {0};
 }
 
 using namespace std;
@@ -141,7 +142,7 @@ conga_testbed(const ArgList &args, Logfile &logfile)
         fd = Workloads::DATAMINING;
     }
 
-    uint32_t Duration = 5;
+    uint32_t Duration = 2;
     double Utilization = 0.8;
     uint32_t AvgFlowSize = 100000;
 
@@ -155,6 +156,8 @@ conga_testbed(const ArgList &args, Logfile &logfile)
     cerr << "load is (" << Utilization << "), " << "workloads is (" << FlowDist << ")\n"; 
 
     double totalBandwidth = NUM_CORE * CORE_SPEED;
+    totalBandwidth = 11520000000000ULL; // 12 * (24 * 40Gbps) = 11.52Tbps
+
     double flowRate = totalBandwidth * Utilization;
 
     FlowGenerator* flowGen = new FlowGenerator(
@@ -180,7 +183,7 @@ void conga::generateRoute(route_t*& fwd, route_t*& rev, uint32_t& src, uint32_t&
     } else {
         dst = rand() % numOfNode;
     }
-
+    //dst = 0;
     if (src != 0) {
         src = src % (numOfNode - 1);
     } else {
@@ -226,14 +229,29 @@ void conga::generateRoute(route_t*& fwd, route_t*& rev, uint32_t& src, uint32_t&
     //Conga
     for (int i = 0; i < NUM_CORE; i++) {
         // long long curCongestion = max(qLeafCore[src_leaf][i]->_flowCapacity, qCoreLeaf[i][dst_leaf]->_flowCapacity);
-        long long curCongestion = max(qLeafCore[src_leaf][i]->_queuesize, qCoreLeaf[i][dst_leaf]->_queuesize);
+        mem_b curCongestion = max(qLeafCore[src_leaf][i]->_queuesize, qCoreLeaf[i][dst_leaf]->_queuesize);
+        //curCongestion = max(curCongestion, qCoreLeaf[i][src_leaf]->_queuesize);
+        //curCongestion = max(curCongestion, qLeafCore[dst_leaf][i]->_queuesize);
+        cout << "Q: " << i << "size is " << curCongestion << " | ";
         if(curCongestion < minCongestion) {
             minCongestion = curCongestion;
             initial_core = i;
         } 
     }
+    
+    cout << "\npick: " << initial_core << "\n"; 
     //ECMP
-    // initial_core = (src_leaf+dst_leaf) % NUM_CORE;
+    if(mode == 1) {
+        initial_core = 0;
+        initial_core = initial_core * 31 + src_server;
+        initial_core = initial_core * 31 + dst_server;
+        initial_core = initial_core % NUM_CORE;
+    }
+
+    arr[initial_core]++;
+    for(int i = 0; i < 12; i++) cout << i << ": " << arr[i] << " ";
+    cout << "\n";
+
 
     fwd->push_back(qServerLeaf[src_leaf][src_server]);
     fwd->push_back(pServerLeaf[src_leaf][src_server]);
