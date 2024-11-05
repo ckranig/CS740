@@ -9,7 +9,7 @@ step=0.1
 end=1.0
 
 # 定義 flowdist 值列表
-flowdists=("uniform" "pareto" "enterprise" "dataming")
+flowdists=("uniform" "pareto" "enterprise" "datamining")
 
 # 迴圈執行不同的 utilization 值
 utilization=$start

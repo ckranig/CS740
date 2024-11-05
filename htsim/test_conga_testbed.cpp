@@ -21,8 +21,8 @@ namespace conga {
     const uint64_t CORE_BUFFER = 1024000;
     const uint64_t ENDH_BUFFER = 8192000;
     // link's configure
-    const uint64_t CORE_SPEED = 40000000000;   // core <--> leaf   (40gbps)  
-    const uint64_t LEAF_SPEED = 10000000000;   // leaf <--> server (10gbps)
+    const uint64_t CORE_SPEED = 4000000000;   // core <--> leaf   (40gbps)  
+    const uint64_t LEAF_SPEED = 1000000000;   // leaf <--> server (10gbps)
     const double   LINK_DELAY = 0.1;           // in microsec
 
 
@@ -42,7 +42,7 @@ namespace conga {
     void generateRoute(route_t*& fwd, route_t*& rev, uint32_t& src, uint32_t& dst, uint64_t flowSize,  simtime_picosec startTime);
 
     uint32_t mode = 0;
-    int arr[12] = {0};
+    long long arr[12] = {0};
 }
 
 using namespace std;
@@ -155,8 +155,8 @@ conga_testbed(const ArgList &args, Logfile &logfile)
     if(mode == 1) cerr << "ECMP: ";
     cerr << "load is (" << Utilization << "), " << "workloads is (" << FlowDist << ")\n"; 
 
-    double totalBandwidth = NUM_CORE * CORE_SPEED;
-    totalBandwidth = 11520000000000ULL; // 12 * (24 * 40Gbps) = 11.52Tbps
+    double totalBandwidth = NUM_CORE * CORE_SPEED; 
+    totalBandwidth = NUM_CORE * NUM_LEAF *CORE_SPEED; // 12 * (24 * 40Gbps) = 11.52Tbps
 
     double flowRate = totalBandwidth * Utilization;
 
@@ -225,32 +225,40 @@ void conga::generateRoute(route_t*& fwd, route_t*& rev, uint32_t& src, uint32_t&
     // build network topology
     uint32_t initial_core = 0;
     long long minCongestion = LLONG_MAX;
-
+    long long minUse = LLONG_MAX;
     //Conga
     for (int i = 0; i < NUM_CORE; i++) {
         // long long curCongestion = max(qLeafCore[src_leaf][i]->_flowCapacity, qCoreLeaf[i][dst_leaf]->_flowCapacity);
         mem_b curCongestion = max(qLeafCore[src_leaf][i]->_queuesize, qCoreLeaf[i][dst_leaf]->_queuesize);
         //curCongestion = max(curCongestion, qCoreLeaf[i][src_leaf]->_queuesize);
         //curCongestion = max(curCongestion, qLeafCore[dst_leaf][i]->_queuesize);
+
         cout << "Q: " << i << "size is " << curCongestion << " | ";
         if(curCongestion < minCongestion) {
             minCongestion = curCongestion;
+            minUse = arr[i];
             initial_core = i;
-        } 
+        }
+        if(curCongestion == minCongestion) {
+            if(arr[i] < minUse) {
+                minUse = arr[i];
+                initial_core = i;
+            }
+        }
     }
-    
-    cout << "\npick: " << initial_core << "\n"; 
+    //cout << "\npick: " << initial_core << "\n"; 
     //ECMP
     if(mode == 1) {
-        initial_core = 0;
-        initial_core = initial_core * 31 + src_server;
-        initial_core = initial_core * 31 + dst_server;
-        initial_core = initial_core % NUM_CORE;
+        initial_core = rand() % NUM_CORE;
+        // initial_core = initial_core * 31 + src_server;
+        // initial_core = initial_core * 31 + dst_server;
+        // initial_core = initial_core % NUM_CORE;
+        //cout << "pick by ecmp\n";
     }
 
     arr[initial_core]++;
-    for(int i = 0; i < 12; i++) cout << i << ": " << arr[i] << " ";
-    cout << "\n";
+    // for(int i = 0; i < 12; i++) cout << i << ": " << arr[i] << " ";
+    // cout << "\n";
 
 
     fwd->push_back(qServerLeaf[src_leaf][src_server]);
