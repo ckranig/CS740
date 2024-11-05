@@ -81,7 +81,7 @@ def plot_ratio(distribution, flow_size, ax):
     ax.set_title(f'{distribution.capitalize()} Distribution - {flow_size.capitalize()} Flows')
     ax.grid(True, linestyle='--', alpha=0.7)
     ax.legend()
-    ax.set_ylim([0.5, 1.5])
+    ax.set_ylim([0.5, 1.6])
 
 # Create plots
 fig = plt.figure(figsize=(20, 15))
